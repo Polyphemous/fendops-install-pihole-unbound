@@ -1,3 +1,37 @@
+#!/bin/bash
+# ------------------------------------------------------------
+# Title: Pi-hole + Unbound Auto Installer
+# Author: Matt [Polyphemous]
+# License: MIT
+# Created: May 2025
+#
+# Description:
+#   Installs and configures Pi-hole with Unbound in Docker.
+#
+# AI Usage:
+#   Script logic and automation refined with help from OpenAI's ChatGPT.
+#
+# GitHub: https://github.com/Polyphemous/fendops-install-pihole-unbound
+# ------------------------------------------------------------
+
+#Removal Line: docker stop pihole && docker stop unbound && docker rm pihole && docker rm unbound
+#sudo rm -r pihole/
+
+# -----------------------------
+# Install Docker if not found
+# -----------------------------
+if ! command -v docker &>/dev/null; then
+  echo "[INFO] Docker not found. Installing Docker..."
+  curl -fsSL https://get.docker.com | sh
+  sudo usermod -aG docker "$USER"
+  echo "[INFO] Docker installed. Please log out and back in for group changes to apply."
+  exec su -l "$USER"
+  exit 0
+fi
+
+
+
+
 # Create project structure
 mkdir -p ~/pihole/{pihole,dnsmasq,unbound}
 cd ~/pihole
