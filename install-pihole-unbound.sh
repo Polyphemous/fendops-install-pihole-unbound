@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # ------------------------------------------------------------
 # Title: Pi-hole + Unbound Auto Installer
 # Author: Matt [Polyphemous]
@@ -10,34 +11,42 @@
 #
 # AI Usage:
 #   Script logic and automation refined with help from OpenAI's ChatGPT.
-#
-# GitHub: https://github.com/Polyphemous/fendops-install-pihole-unbound
 # ------------------------------------------------------------
 
-#Removal Line: docker stop pihole && docker stop unbound && docker rm pihole && docker rm unbound
-#sudo rm -r pihole/
-
 # -----------------------------
-# Install Docker if not found
+# Require sudo/root
 # -----------------------------
-if ! command -v docker &>/dev/null; then
-  echo "[INFO] Docker not found. Installing Docker..."
-  curl -fsSL https://get.docker.com | sh
-  sudo usermod -aG docker "$USER"
-  echo "[INFO] Docker installed. Please log out and back in for group changes to apply."
-  exec su -l "$USER"
-  exit 0
+if [[ $EUID -ne 0 ]]; then
+  echo "[❌] This installer must be run as root. Use: sudo $0"
+  exit 1
 fi
 
+# -----------------------------
+# Install curl if missing
+# -----------------------------
+if ! command -v curl &>/dev/null; then
+  echo "[📦] Installing curl..."
+  apt update && apt install -y curl
+fi
 
+# -----------------------------
+# Install Docker if missing
+# -----------------------------
+if ! command -v docker &>/dev/null; then
+  echo "[📦] Installing Docker..."
+  curl -fsSL https://get.docker.com | sh
+fi
 
-
-# Create project structure
+# -----------------------------
+# Create directories
+# -----------------------------
 mkdir -p ~/pihole/{pihole,dnsmasq,unbound}
-cd ~/pihole
+cd ~/pihole || exit 1
 
-# Create docker-compose.yml
-cat > docker-compose.yml << EOF
+# -----------------------------
+# docker-compose.yml
+# -----------------------------
+cat > docker-compose.yml << 'EOF'
 services:
   pihole:
     container_name: pihole
@@ -48,7 +57,6 @@ services:
       - "80:80/tcp"
     environment:
       TZ: "America/New_York"
-      WEBPASSWORD: "$PIHOLE_PW"
       DNSMASQ_LISTENING: "all"
       PIHOLE_DNS_1: "unbound#53"
       PIHOLE_DNS_2: ""
@@ -77,7 +85,9 @@ networks:
     driver: bridge
 EOF
 
-# Create unbound config
+# -----------------------------
+# Unbound config
+# -----------------------------
 cat > unbound/custom.conf << 'EOF'
 server:
   verbosity: 1
@@ -98,10 +108,14 @@ server:
   root-hints: "/opt/unbound/etc/unbound/custom/root.hints"
 EOF
 
+# -----------------------------
 # Download root hints
-curl -o unbound/root.hints https://www.internic.net/domain/named.root
+# -----------------------------
+curl -sS -o unbound/root.hints https://www.internic.net/domain/named.root
 
-# Create dnsmasq config
+# -----------------------------
+# dnsmasq config
+# -----------------------------
 cat > dnsmasq/02-lan-access.conf << 'EOF'
 listen-address=0.0.0.0
 bind-interfaces
@@ -109,7 +123,9 @@ domain-needed
 bogus-priv
 EOF
 
-# Pre-load Pi-hole config to allow remote clients
+# -----------------------------
+# SetupVars for initial config
+# -----------------------------
 cat > pihole/setupVars.conf << 'EOF'
 PIHOLE_INTERFACE=eth0
 IPV4_ADDRESS=0.0.0.0
@@ -118,7 +134,6 @@ PIHOLE_DNS_1=unbound#53
 PIHOLE_DNS_2=
 QUERY_LOGGING=true
 INSTALL_WEB=true
-WEBPASSWORD=$PIHOLE_PW
 REV_SERVER=false
 DNS_FQDN_REQUIRED=true
 DNS_BOGUS_PRIV=true
@@ -126,7 +141,21 @@ BLOCKING_ENABLED=true
 DNS_ALLOW_EXTERNAL=true
 EOF
 
+# -----------------------------
 # Start containers
+# -----------------------------
 docker compose up -d
 
+# -----------------------------
+# Final notes
+# -----------------------------
+echo
+echo "[✅] Pi-hole + Unbound installed and running!"
+echo "[ℹ️] Visit the web interface at: http://<your-ip>/admin"
+echo
+
+# -----------------------------
+# Prompt for password
+# -----------------------------
+echo "[🔐] Set your Pi-hole admin password now:"
 docker exec -it pihole pihole setpassword
